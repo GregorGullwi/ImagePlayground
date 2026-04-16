@@ -19,14 +19,29 @@ import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
-import org.opencv.core.Point;
-import org.opencv.core.Scalar;
-import org.opencv.imgproc.Imgproc;
 
 public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
 
     private static final String TAG = "Panorama";
     private static final int CAMERA_PERMISSION_REQUEST = 100;
+
+    private enum FilterMode {
+        OFF(0, R.string.filter_off),
+        EDGE(1, R.string.filter_edge);
+
+        private final int nativeId;
+        private final int labelResId;
+
+        FilterMode(int nativeId, int labelResId) {
+            this.nativeId = nativeId;
+            this.labelResId = labelResId;
+        }
+
+        private FilterMode next() {
+            FilterMode[] modes = values();
+            return modes[(ordinal() + 1) % modes.length];
+        }
+    }
 
     static {
         System.loadLibrary("panorama");
@@ -34,11 +49,9 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
     private ActivityMainBinding binding;
     private Mat rgbaFrame;
-    private Mat grayFrame;
-    private Mat edgeFrame;
     private Mat firstPanoramaFrame;
     private Bitmap panoramaBitmap;
-    private boolean useCppKernel = true;
+    private FilterMode activeFilter = FilterMode.OFF;
     private boolean panoramaMode = false;
     private int panoramaCaptureCount = 0;
     private volatile boolean captureRequested = false;
@@ -53,10 +66,10 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         binding.cameraView.setVisibility(SurfaceView.VISIBLE);
         binding.cameraView.setCameraIndex(CameraBridgeViewBase.CAMERA_ID_BACK);
         binding.cameraView.setCvCameraViewListener(this);
-        binding.modeButton.setOnClickListener(view -> toggleProcessingMode());
+        binding.filterButton.setOnClickListener(view -> toggleFilter());
         binding.panoramaButton.setOnClickListener(view -> handlePanoramaButtonClick());
         binding.okButton.setOnClickListener(view -> hidePanoramaResult());
-        updateModeButtonText();
+        updateFilterButtonText();
 
         if (!OpenCVLoader.initLocal()) {
             Log.e(TAG, "OpenCV initialization failed");
@@ -91,8 +104,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     @Override
     public void onCameraViewStarted(int width, int height) {
         rgbaFrame = new Mat();
-        grayFrame = new Mat();
-        edgeFrame = new Mat();
     }
 
     @Override
@@ -100,14 +111,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         if (rgbaFrame != null) {
             rgbaFrame.release();
             rgbaFrame = null;
-        }
-        if (grayFrame != null) {
-            grayFrame.release();
-            grayFrame = null;
-        }
-        if (edgeFrame != null) {
-            edgeFrame.release();
-            edgeFrame = null;
         }
     }
 
@@ -125,41 +128,22 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
             return rgbaFrame;
         }
 
-        if (useCppKernel) {
-            processFrame(rgbaFrame.getNativeObjAddr());
-        } else {
-            processFrameInJava(rgbaFrame);
-        }
+        processFrame(rgbaFrame.getNativeObjAddr(), activeFilter.nativeId);
 
         return rgbaFrame;
     }
 
-    private native void processFrame(long rgbaMatAddr);
+    private native void processFrame(long rgbaMatAddr, int filterMode);
 
     private native long createPanorama(long[] rgbaMatAddrs);
 
-    private void processFrameInJava(Mat rgba) {
-        Imgproc.cvtColor(rgba, grayFrame, Imgproc.COLOR_RGBA2GRAY);
-        Imgproc.Canny(grayFrame, edgeFrame, 80, 160);
-        rgba.setTo(new Scalar(0, 255, 0, 255), edgeFrame);
-        Imgproc.putText(
-                rgba,
-                "Java OpenCV",
-                new Point(24, 64),
-                Imgproc.FONT_HERSHEY_SIMPLEX,
-                1.0,
-                new Scalar(255, 255, 255, 255),
-                2
-        );
+    private void toggleFilter() {
+        activeFilter = activeFilter.next();
+        updateFilterButtonText();
     }
 
-    private void toggleProcessingMode() {
-        useCppKernel = !useCppKernel;
-        updateModeButtonText();
-    }
-
-    private void updateModeButtonText() {
-        binding.modeButton.setText(useCppKernel ? R.string.mode_cpp : R.string.mode_java);
+    private void updateFilterButtonText() {
+        binding.filterButton.setText(activeFilter.labelResId);
     }
 
     private void handlePanoramaButtonClick() {
@@ -249,7 +233,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         binding.resultImage.setImageBitmap(panoramaBitmap);
         binding.resultOverlay.setVisibility(View.VISIBLE);
         binding.panoramaButton.setVisibility(View.GONE);
-        binding.modeButton.setVisibility(View.GONE);
+        binding.filterButton.setVisibility(View.GONE);
         resetPanoramaCapture();
     }
 
@@ -257,7 +241,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         binding.resultOverlay.setVisibility(View.GONE);
         binding.resultImage.setImageDrawable(null);
         binding.panoramaButton.setVisibility(View.VISIBLE);
-        binding.modeButton.setVisibility(View.VISIBLE);
+        binding.filterButton.setVisibility(View.VISIBLE);
         binding.panoramaButton.setText(R.string.panorama);
         binding.panoramaButton.setEnabled(true);
     }

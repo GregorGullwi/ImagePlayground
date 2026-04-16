@@ -12,14 +12,14 @@
         android:visibility="gone" />
 
     <Button
-        android:id="@+id/mode_button"
+        android:id="@+id/filter_button"
         android:layout_width="wrap_content"
         android:layout_height="48dp"
         android:layout_gravity="top|end"
         android:layout_margin="16dp"
         android:elevation="8dp"
         android:minWidth="144dp"
-        android:text="@string/mode_cpp"
+        android:text="@string/filter_off"
         android:textAllCaps="false" />
 
     <Button

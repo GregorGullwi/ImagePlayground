@@ -1,8 +1,8 @@
 <resources>
     <string name="app_name">Panorama</string>
     <string name="camera_permission_denied">Kamerabehörighet krävs för att visa kameran.</string>
-    <string name="mode_cpp">Mode: C++</string>
-    <string name="mode_java">Mode: Java</string>
+    <string name="filter_off">Filter: Off</string>
+    <string name="filter_edge">Filter: Edge</string>
     <string name="panorama">Panorama</string>
     <string name="capture_first">Take photo 1</string>
     <string name="capture_second">Take photo 2</string>

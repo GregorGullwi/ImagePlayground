@@ -5,7 +5,25 @@
 
 namespace {
 
-void applyCustomKernel(cv::Mat& rgba) {
+enum class FilterMode : jint {
+    Off = 0,
+    Edge = 1,
+};
+
+using FilterFunction = void (*)(cv::Mat&);
+
+struct FilterDefinition {
+    FilterMode mode;
+    const char* name;
+    FilterFunction apply;
+};
+
+namespace Filter {
+
+void Off(cv::Mat& /* rgba */) {
+}
+
+void Edge(cv::Mat& rgba) {
     if (rgba.empty() || rgba.type() != CV_8UC4 || rgba.rows < 3 || rgba.cols < 3) {
         return;
     }
@@ -36,16 +54,23 @@ void applyCustomKernel(cv::Mat& rgba) {
 
     sharpened.copyTo(rgba);
     rgba.setTo(cv::Scalar(0, 255, 40, 255), edgeMask);
+}
 
-    cv::putText(
-            rgba,
-            "C++ kernel",
-            cv::Point(24, 64),
-            cv::FONT_HERSHEY_SIMPLEX,
-            1.0,
-            cv::Scalar(255, 255, 255, 255),
-            2
-    );
+}
+
+constexpr FilterDefinition FILTERS[] = {
+        {FilterMode::Off, "Off", &Filter::Off},
+        {FilterMode::Edge, "Edge", &Filter::Edge},
+};
+
+const FilterDefinition* findFilter(jint filterMode) {
+    for (const FilterDefinition& filter : FILTERS) {
+        if (static_cast<jint>(filter.mode) == filterMode) {
+            return &filter;
+        }
+    }
+
+    return nullptr;
 }
 
 cv::Mat* createSideBySidePanorama(const std::vector<cv::Mat>& images) {
@@ -96,9 +121,29 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_gregorgullwi_panorama_MainActivity_processFrame(
         JNIEnv* /* env */,
         jobject /* this */,
-        jlong rgbaMatAddr) {
+        jlong rgbaMatAddr,
+        jint filterMode) {
+    if (rgbaMatAddr == 0) {
+        return;
+    }
+
+    const FilterDefinition* filter = findFilter(filterMode);
+    if (filter == nullptr || filter->apply == nullptr) {
+        return;
+    }
+
     auto& rgba = *reinterpret_cast<cv::Mat*>(rgbaMatAddr);
-    applyCustomKernel(rgba);
+    filter->apply(rgba);
+
+    cv::putText(
+            rgba,
+            filter->name,
+            cv::Point(24, 64),
+            cv::FONT_HERSHEY_SIMPLEX,
+            1.0,
+            cv::Scalar(255, 255, 255, 255),
+            2
+    );
 }
 
 extern "C" JNIEXPORT jlong JNICALL
